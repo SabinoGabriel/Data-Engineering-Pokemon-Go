@@ -1,0 +1,88 @@
+# Pokemon GO Black & White List Generator - Configuration
+
+# Logging settings
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_path: "logs/app.log"
+  console_enabled: true
+  file_enabled: true
+
+# Cache settings
+cache:
+  enabled: true
+  expire_after: 3600  # seconds (1 hour)
+  backend: "sqlite"
+  path: "cache/http_cache"
+
+# API endpoints
+apis:
+  pvpoke:
+    base_url: "https://pvpoke.com"
+    rankings_endpoint: "/rankings/all/overall/rankings.json"
+    timeout: 30
+  
+  pokeapi:
+    base_url: "https://pokeapi.co/api/v2"
+    timeout: 30
+  
+  gohub:
+    base_url: "https://pokemongohub.net"
+    timeout: 30
+
+# Data processing
+processing:
+  # Ranking thresholds for whitelist
+  whitelist:
+    great_league_top: 50  # Top N Pokemon for Great League
+    ultra_league_top: 50  # Top N Pokemon for Ultra League
+    master_league_top: 30  # Top N Pokemon for Master League
+  
+  # Evolution chain expansion
+  evolution:
+    include_pre_evolutions: true
+    include_all_forms: true
+  
+  # Validation
+  validation:
+    min_pokemon_id: 1
+    max_pokemon_id: 1025  # Gen 9 limit
+    allow_shadow: true
+    allow_mega: true
+    allow_regional: true
+
+# Export settings
+export:
+  output_dir: "output"
+  formats:
+    - "csv"
+    - "search_string"
+  csv:
+    delimiter: ","
+    encoding: "utf-8"
+  search_string:
+    max_length: 2000  # Pokemon GO search string limit
+    chunk_if_exceeds: true
+
+# Static data
+static:
+  # Pokemon to always include in whitelist (regardless of rankings)
+  forced_whitelist:
+    - "Mewtwo"
+    - "Dialga"
+    - "Kyogre"
+    - "Groudon"
+  
+  # Pokemon to always exclude (blacklist)
+  forced_blacklist:
+    - "Weedle"
+    - "Caterpie"
+  
+  # Regional Pokemon
+  regionals:
+    - "Tauros"
+    - "Mr. Mime"
+    - "Kangaskhan"
+    - "Farfetch'd"
+    - "Heracross"
+    - "Corsola"

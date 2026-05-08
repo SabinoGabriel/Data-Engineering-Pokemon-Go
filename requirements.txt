@@ -1,0 +1,21 @@
+# Core dependencies
+requests>=2.31.0
+requests-cache>=1.1.1
+pyyaml>=6.0.1
+
+# Web scraping
+beautifulsoup4>=4.12.3
+lxml>=5.1.0
+
+# Data processing (usando versão compatível com Python 3.13)
+pandas>=2.2.3
+numpy>=1.26.4
+
+# Logging and monitoring
+colorlog>=6.8.2
+
+# Type hints and development
+typing-extensions>=4.9.0
+
+# Progress bars
+tqdm>=4.66.0
