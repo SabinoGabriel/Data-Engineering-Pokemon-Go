@@ -9,6 +9,8 @@ import pandas as pd
 
 from src.constants import DB_PATH
 
+RANK_COLUMNS = ("rank_gl", "rank_ul", "rank_ml")
+
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -46,12 +48,54 @@ def init_db(conn: sqlite3.Connection) -> None:
             species_slug TEXT NOT NULL,
             chain_id TEXT NOT NULL,
             family_key TEXT NOT NULL,
-            quantidade_listas INTEGER NOT NULL,
+            rank_gl INTEGER NULL,
+            rank_ul INTEGER NULL,
+            rank_ml INTEGER NULL,
             updated_at TEXT NOT NULL
         );
         """
     )
+    _recreate_dimension_if_schema_changed(conn)
     conn.commit()
+
+
+def _recreate_dimension_if_schema_changed(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("PRAGMA table_info(pokemon_dimension)").fetchall()
+    columns = {row[1] for row in rows}
+    expected_columns = {
+        "entity_key",
+        "pokedex_id",
+        "nome",
+        "forma_regional",
+        "species_slug",
+        "chain_id",
+        "family_key",
+        "rank_gl",
+        "rank_ul",
+        "rank_ml",
+        "updated_at",
+    }
+    if columns == expected_columns:
+        return
+
+    conn.execute("DROP TABLE IF EXISTS pokemon_dimension")
+    conn.execute(
+        """
+        CREATE TABLE pokemon_dimension (
+            entity_key TEXT PRIMARY KEY,
+            pokedex_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            forma_regional TEXT NOT NULL,
+            species_slug TEXT NOT NULL,
+            chain_id TEXT NOT NULL,
+            family_key TEXT NOT NULL,
+            rank_gl INTEGER NULL,
+            rank_ul INTEGER NULL,
+            rank_ml INTEGER NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
 
 
 def set_metadata(conn: sqlite3.Connection, key: str, value: str) -> None:
@@ -74,10 +118,20 @@ def has_dimension(conn: sqlite3.Connection) -> bool:
     return conn.execute("SELECT COUNT(*) FROM pokemon_dimension").fetchone()[0] > 0
 
 
-def read_dashboard_dimension(conn: sqlite3.Connection) -> pd.DataFrame:
+def read_pokemon_dimension(conn: sqlite3.Connection) -> pd.DataFrame:
     return pd.read_sql_query(
         """
-        SELECT pokedex_id, nome, forma_regional, quantidade_listas
+        SELECT
+            entity_key,
+            pokedex_id,
+            nome,
+            forma_regional,
+            species_slug,
+            chain_id,
+            family_key,
+            rank_gl,
+            rank_ul,
+            rank_ml
         FROM pokemon_dimension
         ORDER BY pokedex_id, forma_regional
         """,
@@ -95,6 +149,8 @@ def persist_rankings(conn: sqlite3.Connection, rankings: dict[str, pd.DataFrame]
 def persist_dimension(conn: sqlite3.Connection, dimension: pd.DataFrame) -> None:
     conn.execute("DELETE FROM pokemon_dimension")
     output = dimension.copy()
+    for column in RANK_COLUMNS:
+        output[column] = output[column].astype("Int64")
     output["updated_at"] = now_utc()
     output.to_sql("pokemon_dimension", conn, if_exists="append", index=False)
     conn.commit()

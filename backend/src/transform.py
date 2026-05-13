@@ -134,7 +134,7 @@ def filter_elite_rankings(rankings: dict[str, pd.DataFrame]) -> dict[str, pd.Dat
     return filtered
 
 
-def compute_quantidade_listas(
+def add_family_ranks(
     dimension: pd.DataFrame, filtered_rankings: dict[str, pd.DataFrame]
 ) -> pd.DataFrame:
     dim = dimension.copy()
@@ -145,29 +145,39 @@ def compute_quantidade_listas(
         .to_dict()
     )
 
-    family_leagues: dict[str, set[str]] = {}
+    family_ranks: dict[str, dict[str, int]] = {}
     for league, ranking_df in filtered_rankings.items():
-        for row in ranking_df[["species_slug", "forma_regional"]].drop_duplicates().itertuples():
+        rank_column = f"rank_{league.lower()}"
+        for row in ranking_df[
+            ["species_slug", "forma_regional", "rank_position"]
+        ].itertuples():
             chain_id = species_to_chain.get(row.species_slug, f"unknown:{row.species_slug}")
 
             # Critical regional isolation rule:
             # The propagated utility key is PvPoke family_id + regional_form.
-            # Galarian Stunfisk writes to "FAMILY_STUNFISK|galar", while
-            # Kanto/Base Stunfisk reads from "FAMILY_STUNFISK|base" and stays
-            # at 0 unless that exact base branch appears in an elite PvPoke list.
+            # Galarian Stunfisk writes to "FAMILY_STUNFISK|galar", while Kanto/Base
+            # Stunfisk reads from "FAMILY_STUNFISK|base" and stays unranked unless
+            # that exact base branch appears in an elite PvPoke list.
             family_key = f"{chain_id}|{row.forma_regional}"
-            family_leagues.setdefault(family_key, set()).add(league)
+            current_rank = family_ranks.setdefault(family_key, {}).get(rank_column)
+            rank_position = int(row.rank_position)
+            if current_rank is None or rank_position < current_rank:
+                family_ranks[family_key][rank_column] = rank_position
 
-    dim["quantidade_listas"] = dim["family_key"].map(
-        lambda family_key: len(family_leagues.get(family_key, set()))
-    )
+    for league in LEAGUES:
+        rank_column = f"rank_{league.lower()}"
+        dim[rank_column] = dim["family_key"].map(
+            lambda family_key: family_ranks.get(family_key, {}).get(rank_column)
+        )
+        dim[rank_column] = dim[rank_column].astype("Int64")
+
     return dim
 
 
-def build_transfer_string(df: pd.DataFrame) -> str:
-    zero_ids = sorted(
+def build_transfer_string_from_ids(pokedex_ids: Iterable[int]) -> str:
+    unique_ids = sorted(
         int(pokedex_id)
-        for pokedex_id in df.loc[df["quantidade_listas"] == 0, "pokedex_id"].dropna().unique()
+        for pokedex_id in pd.Series(list(pokedex_ids)).dropna().unique()
     )
-    ids = ",".join(str(pokedex_id) for pokedex_id in zero_ids)
+    ids = ",".join(str(pokedex_id) for pokedex_id in unique_ids)
     return f"{ids}{TRANSFER_SUFFIX}" if ids else TRANSFER_SUFFIX

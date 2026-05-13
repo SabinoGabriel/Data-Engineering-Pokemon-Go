@@ -1,9 +1,9 @@
 import pandas as pd
 
 from src.transform import (
+    add_family_ranks,
     build_pokemon_dimension,
-    build_transfer_string,
-    compute_quantidade_listas,
+    build_transfer_string_from_ids,
     normalize_pvpoke_species_id,
     region_from_gamemaster_entry,
 )
@@ -26,7 +26,7 @@ def test_region_from_gamemaster_entry_uses_family_refs_for_regional_evolutions()
     assert region_from_gamemaster_entry(entry) == "galar"
 
 
-def test_compute_quantidade_listas_does_not_leak_between_base_and_regional_forms():
+def test_add_family_ranks_does_not_leak_between_base_and_regional_forms():
     dimension = pd.DataFrame(
         [
             {
@@ -50,16 +50,23 @@ def test_compute_quantidade_listas_does_not_leak_between_base_and_regional_forms
         ]
     )
     filtered_rankings = {
-        "GL": pd.DataFrame([{"species_slug": "stunfisk", "forma_regional": "galar"}]),
-        "UL": pd.DataFrame([{"species_slug": "stunfisk", "forma_regional": "galar"}]),
-        "ML": pd.DataFrame(columns=["species_slug", "forma_regional"]),
+        "GL": pd.DataFrame(
+            [{"species_slug": "stunfisk", "forma_regional": "galar", "rank_position": 4}]
+        ),
+        "UL": pd.DataFrame(
+            [{"species_slug": "stunfisk", "forma_regional": "galar", "rank_position": 8}]
+        ),
+        "ML": pd.DataFrame(columns=["species_slug", "forma_regional", "rank_position"]),
     }
 
-    result = compute_quantidade_listas(dimension, filtered_rankings)
+    result = add_family_ranks(dimension, filtered_rankings)
 
-    counts = result.set_index("entity_key")["quantidade_listas"].to_dict()
-    assert counts["stunfisk|base"] == 0
-    assert counts["stunfisk|galar"] == 2
+    ranks = result.set_index("entity_key")[["rank_gl", "rank_ul", "rank_ml"]]
+    assert pd.isna(ranks.loc["stunfisk|base", "rank_gl"])
+    assert ranks.loc["stunfisk|galar", "rank_gl"] == 4
+    assert ranks.loc["stunfisk|galar", "rank_ul"] == 8
+    assert pd.isna(ranks.loc["stunfisk|galar", "rank_ml"])
+    assert str(result["rank_gl"].dtype) == "Int64"
 
 
 def test_build_pokemon_dimension_uses_base_species_for_regional_family_fallback():
@@ -88,17 +95,8 @@ def test_build_pokemon_dimension_uses_base_species_for_regional_family_fallback(
     assert families["stunfisk|galar"] == "FAMILY_STUNFISK|galar"
 
 
-def test_build_transfer_string_deduplicates_ids_and_appends_safety_suffix():
-    df = pd.DataFrame(
-        [
-            {"pokedex_id": 1, "quantidade_listas": 0},
-            {"pokedex_id": 1, "quantidade_listas": 0},
-            {"pokedex_id": 2, "quantidade_listas": 1},
-            {"pokedex_id": 3, "quantidade_listas": 0},
-        ]
-    )
-
-    transfer_string = build_transfer_string(df)
+def test_build_transfer_string_from_ids_deduplicates_ids_and_appends_safety_suffix():
+    transfer_string = build_transfer_string_from_ids([1, 1, 3])
 
     assert transfer_string.startswith("1,3&!shiny")
     assert "&!legendary&!mythical" in transfer_string

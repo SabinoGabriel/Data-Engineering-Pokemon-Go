@@ -1,148 +1,123 @@
-# Data Engineering Pokemon GO PvP ETL Dashboard
+# Pokemon GO PvP Safe Trash
 
 [Read in English](README.md)
 
-Projeto de engenharia de dados em Python com pipeline ETL e dashboard interativo em Streamlit para rankings PvP do Pokemon GO.
+Monorepo para um ETL de rankings PvP de Pokemon GO e uma aplicacao de Lixeira Segura dinamica.
 
-O pipeline extrai dados do PvPoke, transforma as informacoes com pandas, grava o resultado curado em SQLite e gera uma string segura de transferencia para Pokemon sem utilidade PvP detectada na familia evolutiva.
+O backend extrai rankings do PvPoke, modela familias de Pokemon GO em SQLite e expoe uma API FastAPI que calcula a string de transferencia sob demanda. O frontend e um app Next.js mobile-first com sliders de rank para Great League, Ultra League e Master League.
 
-## Stack Tecnica
+## Stack
 
-- Python
-- pandas
-- requests
-- SQLite
-- Streamlit
-- pytest
-- GitHub Actions
-
-## O Que Este Projeto Demonstra
-
-- Arquitetura de pipeline ETL com camadas claras de Extract, Transform e Load
-- Integracao com APIs e arquivos JSON hospedados no GitHub
-- Modelagem de dados para regras de negocio especificas
-- Transformacoes analiticas com pandas
-- Persistencia local reprodutivel com SQLite
-- Desenvolvimento de dashboard com Streamlit
-- Testes automatizados para regras criticas de transformacao
-- Estrutura de repositorio adequada para vagas de dados e Python
-
-## Fontes de Dados
-
-- Great League: top 150 do PvPoke
-- Ultra League: top 100 do PvPoke
-- Master League: top 40 do PvPoke
-- Dimensao Pokemon: `gamemaster.json` do PvPoke
-
-O projeto usa o `gamemaster.json` do PvPoke como dimensao principal porque ele representa melhor o universo do Pokemon GO: formas, Pokemon lancados, IDs usados no PvPoke, sombras e metadados de familia.
+- Backend: Python, pandas, requests, SQLite, FastAPI, Pydantic, pytest
+- Frontend: Next.js, React, TypeScript
+- CI: GitHub Actions
 
 ## Arquitetura
 
 ```text
 .
-|-- app.py                         # Entrada do Streamlit
-|-- requirements.txt               # Dependencias Python
-|-- README.md                      # Documentacao em ingles
-|-- README.pt-BR.md                # Documentacao em portugues do Brasil
-|-- LICENSE                        # Licenca MIT
-|-- cache/                         # SQLite local, ignorado pelo git
-|-- tests/                         # Testes unitarios das regras de transformacao
-|-- .github/workflows/ci.yml       # CI com GitHub Actions
-|-- src/
-|   |-- constants.py               # URLs, cortes das ligas, regioes e sufixo de transferencia
-|   |-- dashboard.py               # UI Streamlit e filtros
-|   |-- database.py                # Schema e persistencia SQLite
-|   |-- etl.py                     # Orquestracao Extract -> Transform -> Load
-|   |-- transform.py               # Regras de negocio, formas regionais e familias
-|   |-- data_sources/
-|   |   |-- pvpoke_client.py       # Cliente para rankings e gamemaster do PvPoke
-|   |   `-- static_data.py         # Dados auxiliares legados
-|   `-- utils/
-|       `-- logger.py              # Logger do projeto
+|-- backend/
+|   |-- requirements.txt
+|   |-- pytest.ini
+|   |-- cache/                    # SQLite local, ignorado pelo git
+|   |-- config/
+|   |-- tests/
+|   `-- src/
+|       |-- constants.py          # URLs, cortes por liga, regioes, sufixo da string
+|       |-- database.py           # Schema SQLite e persistencia
+|       |-- etl.py                # Orquestracao Extract -> Transform -> Load
+|       |-- transform.py          # Propagacao de ranks por familia e helpers
+|       |-- api/main.py           # App FastAPI
+|       `-- data_sources/
+|           `-- pvpoke_client.py  # Cliente PvPoke
+|-- frontend/
+|   |-- package.json
+|   `-- app/
+|       |-- page.tsx              # UI dinamica da Lixeira Segura
+|       `-- globals.css
+`-- .github/workflows/ci.yml
 ```
 
-## Regra Critica: Formas Regionais
+## Regra de Negocio: Isolamento Regional
 
-Pokemon com a mesma especie base, mas formas regionais diferentes, sao tratados como entidades independentes. Por exemplo, Alolan Ninetales nunca protege Kanto Ninetales, e Galarian Stunfisk nunca protege Stunfisk base.
-
-O ETL propaga utilidade PvP pela chave:
+Formas regionais e formas base sao familias PvP separadas. O backend propaga utilidade de rank com esta chave:
 
 ```text
-family_id|forma_regional
+family_id|regional_form
 ```
 
-Isso significa que `FAMILY_VULPIX|alola` e `FAMILY_VULPIX|base` sao familias separadas no calculo.
+Por exemplo, `FAMILY_VULPIX|alola` e `FAMILY_VULPIX|base` sao independentes. Alolan Ninetales pode proteger Alolan Vulpix, mas nunca protege Vulpix de Kanto.
 
-Essa regra fica implementada em `src/transform.py` e coberta por testes unitarios.
+Essa regra fica em `backend/src/transform.py` e e coberta por testes unitarios.
 
-## Saida do Dashboard
+## Modelo Dinamico de Rankings
 
-A tabela principal mostra:
+A tabela SQLite `pokemon_dimension` armazena ranks exatos e anulaveis:
 
-- `Pokedex ID`
-- `Nome`
-- `Forma Regional`
-- `Quantidade de Listas`
+- `rank_gl`
+- `rank_ul`
+- `rank_ml`
 
-A secao **Lixeira Segura** lista IDs unicos de Pokemon com `quantidade_listas == 0` e adiciona o sufixo de seguranca do Pokemon GO:
+Pokemon fora do corte de uma liga recebem `NULL` naquela coluna. A API recebe os cortes ativos do frontend e considera uma familia protegida quando qualquer rank ativo esta dentro do Top N selecionado.
 
-```text
-&!shiny&!lucky&!shadow&!purified&!legendary&!mythical&!costume&!4*&!3*&!@special
-```
+## Backend API
 
-## Como Rodar
-
-Crie e ative a venv:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-Instale as dependencias:
+A partir de `backend/`:
 
 ```powershell
 python -m pip install -r requirements.txt
+python -m src.etl
+uvicorn src.api.main:app --reload
 ```
 
-Inicie o dashboard:
+Endpoints:
+
+- `GET /health`
+- `POST /trash-string`
+
+Request:
+
+```json
+{
+  "gl_top": 50,
+  "ul_top": null,
+  "ml_top": 40
+}
+```
+
+Response:
+
+```json
+{
+  "ids": [1, 3, 7],
+  "query_string": "1,3,7&!shiny&!lucky&!shadow&!purified&!legendary&!mythical&!costume&!4*&!3*&!@special"
+}
+```
+
+## Frontend
+
+A partir de `frontend/`:
 
 ```powershell
-streamlit run app.py
+npm install
+npm run dev
+```
+
+O frontend espera a API em `http://localhost:8000`. Para trocar:
+
+```powershell
+$env:NEXT_PUBLIC_API_BASE_URL="http://localhost:8000"
 ```
 
 Abra:
 
 ```text
-http://localhost:8501
+http://localhost:3000
 ```
 
-## Rodando Testes
+## Testes
 
 ```powershell
-pytest
+cd backend
+python -m pytest
 ```
-
-## Banco Local
-
-O ETL grava os dados em:
-
-```text
-cache/pokemon_go_pvp.sqlite
-```
-
-Tabelas principais:
-
-- `raw_rankings`: snapshots crus dos rankings do PvPoke
-- `pokemon_dimension`: dimensao final com `quantidade_listas`
-- `metadata`: metadados de atualizacao
-
-## Palavras-Chave do Repositorio
-
-Este projeto foi estruturado para destacar termos comuns em vagas de dados e analytics:
-
-`python`, `pandas`, `streamlit`, `sqlite`, `etl`, `data-engineering`, `dashboard`, `api-integration`, `pokemon-go`, `pvpoke`, `pytest`, `github-actions`
-
-## Licenca
-
-MIT.
