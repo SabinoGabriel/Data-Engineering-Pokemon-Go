@@ -14,9 +14,15 @@ O backend extrai rankings do PvPoke, modela familias de Pokemon GO em SQLite e e
 
 ## Arquitetura
 
+Este README raiz traz apenas a visao geral do monorepo. Os detalhes de arquitetura estao em ingles em:
+
+- [Backend architecture](backend/README.md)
+- [Frontend architecture](frontend/README.md)
+
 ```text
 .
 |-- backend/
+|   |-- README.md                 # Notas de arquitetura do backend
 |   |-- requirements.txt
 |   |-- pytest.ini
 |   |-- cache/                    # SQLite local, ignorado pelo git
@@ -31,6 +37,7 @@ O backend extrai rankings do PvPoke, modela familias de Pokemon GO em SQLite e e
 |       `-- data_sources/
 |           `-- pvpoke_client.py  # Cliente PvPoke
 |-- frontend/
+|   |-- README.md                 # Notas de arquitetura do frontend
 |   |-- package.json
 |   `-- app/
 |       |-- page.tsx              # UI dinamica da Lixeira Segura
@@ -61,6 +68,8 @@ A tabela SQLite `pokemon_dimension` armazena ranks exatos e anulaveis:
 Pokemon fora do corte de uma liga recebem `NULL` naquela coluna. A API recebe os cortes ativos do frontend e considera uma familia protegida quando qualquer rank ativo esta dentro do Top N selecionado.
 
 ## Backend API
+
+Para detalhes de arquitetura e limites planejados de reutilizacao, veja [backend/README.md](backend/README.md).
 
 A partir de `backend/`:
 
@@ -95,6 +104,8 @@ Response:
 ```
 
 ## Frontend
+
+Para detalhes de arquitetura e limites planejados de componentes/hooks, veja [frontend/README.md](frontend/README.md).
 
 A partir de `frontend/`:
 

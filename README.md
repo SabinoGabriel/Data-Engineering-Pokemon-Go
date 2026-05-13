@@ -14,9 +14,15 @@ The backend extracts PvPoke rankings, models released Pokemon GO families in SQL
 
 ## Architecture
 
+This root README gives only the monorepo overview. Architecture details live in:
+
+- [Backend architecture](backend/README.md)
+- [Frontend architecture](frontend/README.md)
+
 ```text
 .
 |-- backend/
+|   |-- README.md                 # Backend architecture notes
 |   |-- requirements.txt
 |   |-- pytest.ini
 |   |-- cache/                    # Local SQLite output, ignored by git
@@ -31,6 +37,7 @@ The backend extracts PvPoke rankings, models released Pokemon GO families in SQL
 |       `-- data_sources/
 |           `-- pvpoke_client.py  # PvPoke rankings and gamemaster client
 |-- frontend/
+|   |-- README.md                 # Frontend architecture notes
 |   |-- package.json
 |   `-- app/
 |       |-- page.tsx              # Dynamic safe trash UI
@@ -61,6 +68,8 @@ The SQLite `pokemon_dimension` table stores exact nullable ranks:
 Pokemon outside a league cutoff have `NULL` for that league. The API receives active cutoffs from the frontend and treats a Pokemon family as protected when any active league rank is within the selected top N.
 
 ## Backend API
+
+For backend architecture and planned reuse boundaries, see [backend/README.md](backend/README.md).
 
 Start from `backend/`:
 
@@ -95,6 +104,8 @@ Response:
 ```
 
 ## Frontend
+
+For frontend architecture and planned component/hook boundaries, see [frontend/README.md](frontend/README.md).
 
 Start from `frontend/`:
 
