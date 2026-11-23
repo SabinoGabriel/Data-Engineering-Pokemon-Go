@@ -113,6 +113,7 @@ Regras de seguranca:
 - `ids` / `chunks` so contem numeros da Pokedex em que **nenhuma** forma e protegida. A busca por numero do jogo pega todas as formas, entao um numero como o 38 (Ninetales de Kanto inutil, de Alola util) fica fora da string principal e aparece em `mixed`.
 - `mixed_strings` sao strings experimentais por regiao (ex.: `alola&26,52&...`). So funcionam se a busca por `alola`/`galar`/`hisui`/`paldea` tambem trouxer as formas regionais. Confira o resultado na tela antes de transferir.
 - `lang` (`en` ou `pt`) escolhe os termos de busca. No jogo os termos so funcionam no idioma configurado. Os termos `pt` **nao foram verificados no jogo** (vieram de listas de terceiros).
+- O sufixo de seguranca exclui brilhante, sortudo, sombroso, purificado, lendario, mitico, traje, favorito, fundo, dinamax e gigamax (alem de 4*, 3* e golpes especiais). **Um termo que o jogo nao reconhece e ignorado sem aviso**, entao um Pokemon protegido ainda apareceria na busca. Antes de confiar em um termo, busque-o sozinho (sem o `!`) e confira se a lista mostra seus Pokemon daquele tipo: `brilhante`, `sortudo`, `sombroso`, `purificado`, `lendário`, `mítico`, `traje`, `@especial`, `favorito`, `fundo`, `dinamax`, `gigamax`.
 - `max_length` divide a saida em blocos independentes (cada um com o sufixo de seguranca completo), caso o jogo corte buscas longas. O limite real do jogo nao e documentado.
 
 ## Frontend

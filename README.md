@@ -113,6 +113,7 @@ Safety rules:
 - `ids` / `chunks` only contain Pokedex numbers where **no** form is protected. The in-game number search matches every form of that number, so a number such as 38 (Kanto Ninetales useless, Alolan Ninetales useful) is excluded from the main string and listed in `mixed`.
 - `mixed_strings` are experimental region-scoped strings (e.g. `alola&26,52&...`). They only work if the in-game `alola`/`galar`/`hisui`/`paldea` search also returns regional forms. Check the result on screen before transferring.
 - `lang` (`en` or `pt`) picks the search terms. In-game terms only work in the game's own language. The `pt` terms are **not verified in-game** (compiled from third-party lists).
+- The safety suffix excludes shiny, lucky, shadow, purified, legendary, mythical, costume, favorite, background, dynamax and gigantamax (plus 4*, 3* and special moves). **A term the game does not recognize is ignored silently**, so a protected Pokemon would still match. Before relying on a term, search it alone (without `!`) and check that the list shows your Pokemon of that kind: `brilhante`, `sortudo`, `sombroso`, `purificado`, `lendário`, `mítico`, `traje`, `@especial`, `favorito`, `fundo`, `dinamax`, `gigamax`.
 - `max_length` splits the output into self-contained chunks (each with the full safety suffix) in case the game truncates long searches. The game's real limit is not documented.
 
 ## Frontend

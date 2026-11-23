@@ -182,21 +182,33 @@ def test_trash_string_portuguese_terms(tmp_path):
     assert "!shiny" not in query
 
 
-def test_trash_string_splits_into_self_contained_chunks(tmp_path):
+def test_trash_string_chunk_limit_is_validated_and_applied(tmp_path):
     db_path = tmp_path / "pokemon.sqlite"
     seed_dimension(db_path)
     client = TestClient(create_app(db_path))
 
-    response = client.post(
-        "/trash-string", json={"gl_top": None, "max_length": 85}
-    )
+    too_small = client.post("/trash-string", json={"gl_top": None, "max_length": 50})
+    ok = client.post("/trash-string", json={"gl_top": None, "max_length": 300})
 
-    chunks = response.json()["chunks"]
-    assert len(chunks) > 1
-    assert all(len(chunk) <= 85 for chunk in chunks)
-    assert all("&!shiny" in chunk and "&!4*" in chunk for chunk in chunks)
-    ids = [int(i) for chunk in chunks for i in chunk.split("&")[0].split(",")]
-    assert sorted(ids) == [1, 4, 618]
+    assert too_small.status_code == 422
+    assert ok.status_code == 200
+    assert ok.json()["chunks"] == [ok.json()["query_string"]]
+
+
+def test_safety_suffix_protects_favorites_backgrounds_and_max_battle_pokemon(tmp_path):
+    db_path = tmp_path / "pokemon.sqlite"
+    seed_dimension(db_path)
+    client = TestClient(create_app(db_path))
+
+    en = client.post("/trash-string", json={"gl_top": 50}).json()["query_string"]
+    pt = client.post(
+        "/trash-string", json={"gl_top": 50, "lang": "pt"}
+    ).json()["query_string"]
+
+    for term in ("favorite", "background", "dynamax", "gigantamax"):
+        assert f"&!{term}" in en
+    for term in ("favorito", "fundo", "dinamax", "gigamax"):
+        assert f"&!{term}" in pt
 
 
 def test_invalid_language_is_rejected(tmp_path):

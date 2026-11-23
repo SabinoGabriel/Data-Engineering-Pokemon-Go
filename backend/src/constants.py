@@ -29,6 +29,10 @@ SEARCH_TERMS = {
         "legendary": "legendary",
         "mythical": "mythical",
         "costume": "costume",
+        "favorite": "favorite",
+        "background": "background",
+        "dynamax": "dynamax",
+        "gigantamax": "gigantamax",
         "special": "@special",
     },
     "pt": {
@@ -39,6 +43,10 @@ SEARCH_TERMS = {
         "legendary": "lendário",
         "mythical": "mítico",
         "costume": "traje",
+        "favorite": "favorito",
+        "background": "fundo",
+        "dynamax": "dinamax",
+        "gigantamax": "gigamax",
         "special": "@especial",
     },
 }
@@ -51,6 +59,10 @@ PROTECTED_TERM_KEYS = (
     "legendary",
     "mythical",
     "costume",
+    "favorite",
+    "background",
+    "dynamax",
+    "gigantamax",
 )
 
 

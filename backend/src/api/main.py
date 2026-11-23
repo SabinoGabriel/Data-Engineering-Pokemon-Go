@@ -21,7 +21,7 @@ class TrashFilters(BaseModel):
     ml_top: int | None = Field(default=None, ge=1)
     lang: Literal["en", "pt"] = "en"
     # Max characters per search string. None = a single string.
-    max_length: int | None = Field(default=None, ge=60, le=2000)
+    max_length: int | None = Field(default=None, ge=150, le=2000)
 
 
 class PokemonSummary(BaseModel):

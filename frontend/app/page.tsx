@@ -365,7 +365,7 @@ export default function Home() {
               Transferir e irreversivel. Cole a string na busca do
               armazenamento e confira a lista na tela antes de transferir.
               {lang === "pt"
-                ? " Os termos em portugues ainda nao foram testados no jogo."
+                ? " Os termos em portugues ainda nao foram testados no jogo, e um termo que o jogo nao reconhece e ignorado sem aviso (um Pokemon brilhante, favorito ou Dinamax poderia ser transferido). Antes de usar, busque cada termo sozinho, sem o !, e confira se a lista vem com Pokemon."
                 : ""}
             </p>
             {trashChunks.length === 0 ? (

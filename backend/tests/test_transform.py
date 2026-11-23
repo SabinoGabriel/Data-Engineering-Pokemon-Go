@@ -3,6 +3,7 @@ import pandas as pd
 from src.transform import (
     add_family_ranks,
     build_pokemon_dimension,
+    build_transfer_chunks,
     build_transfer_string_from_ids,
     normalize_pvpoke_species_id,
     region_from_gamemaster_entry,
@@ -167,3 +168,21 @@ def test_ursaluna_hisui_protects_base_ursaring_and_teddiursa_but_not_the_reverse
         },
     ).set_index("entity_key")
     assert pd.isna(ursaring_ranked.loc["ursaluna|hisui", "rank_gl"])
+
+
+def test_build_transfer_chunks_are_self_contained_and_respect_the_limit():
+    ids = list(range(1, 400))
+
+    for lang in ("en", "pt"):
+        chunks = build_transfer_chunks(ids, lang, max_length=300)
+
+        assert len(chunks) > 1
+        assert all(len(chunk) <= 300 for chunk in chunks)
+        assert all("&!shiny" in chunk or "&!brilhante" in chunk for chunk in chunks)
+        assert all("&!4*&!3*" in chunk for chunk in chunks)
+        covered = [int(i) for chunk in chunks for i in chunk.split("&")[0].split(",")]
+        assert covered == ids
+
+
+def test_build_transfer_chunks_returns_nothing_when_there_is_nothing_to_transfer():
+    assert build_transfer_chunks([], "en", max_length=300) == []
