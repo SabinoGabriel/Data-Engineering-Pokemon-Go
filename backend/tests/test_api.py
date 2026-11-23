@@ -106,13 +106,21 @@ def test_trash_string_filters_single_league_and_preserves_regional_isolation(tmp
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ids"] == [1, 4, 618]
-    assert payload["query_string"].startswith("1,4,618&!shiny")
+    # 618 is mixed (Galar protected, base trash): the number search would hit
+    # both forms, so it must stay out of the main string.
+    assert payload["ids"] == [1, 4]
+    assert payload["query_string"].startswith("1,4&!shiny")
+    assert [m["pokedex_id"] for m in payload["mixed"]] == [618]
+    assert payload["mixed"][0]["protected_forms"] == ["galar"]
+    assert payload["mixed"][0]["trash_forms"] == ["base"]
+    assert payload["mixed_strings"][0]["chunks"][0].startswith(
+        "!alola&!galar&!hisui&!paldea&618&!shiny"
+    )
     assert payload["strings"]["gl"] == "618"
     assert payload["strings"]["ul"] == ""
     assert payload["strings"]["ml"] == ""
     assert payload["strings"]["all"] == "618"
-    assert payload["strings"]["trash"].startswith("1,4,618&!shiny")
+    assert payload["strings"]["trash"].startswith("1,4&!shiny")
     assert [pokemon["entity_key"] for pokemon in payload["lists"]["gl"]] == [
         "stunfisk|galar"
     ]
@@ -135,11 +143,11 @@ def test_trash_string_combines_active_leagues(tmp_path):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ids"] == [1, 618]
+    assert payload["ids"] == [1]
     assert payload["strings"]["gl"] == "618"
     assert payload["strings"]["ml"] == "4"
     assert payload["strings"]["all"] == "4,618"
-    assert payload["strings"]["trash"].startswith("1,618&!shiny")
+    assert payload["strings"]["trash"].startswith("1&!shiny")
     assert [pokemon["entity_key"] for pokemon in payload["lists"]["all"]] == [
         "charmander|base",
         "stunfisk|galar",
@@ -158,3 +166,40 @@ def test_trash_string_with_all_leagues_disabled_returns_all_ids(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["ids"] == [1, 4, 618]
+    assert response.json()["mixed"] == []
+
+
+def test_trash_string_portuguese_terms(tmp_path):
+    db_path = tmp_path / "pokemon.sqlite"
+    seed_dimension(db_path)
+    client = TestClient(create_app(db_path))
+
+    response = client.post("/trash-string", json={"gl_top": 50, "lang": "pt"})
+
+    query = response.json()["query_string"]
+    assert query.startswith("1,4&!brilhante&!sortudo")
+    assert "!traje" in query
+    assert "!shiny" not in query
+
+
+def test_trash_string_splits_into_self_contained_chunks(tmp_path):
+    db_path = tmp_path / "pokemon.sqlite"
+    seed_dimension(db_path)
+    client = TestClient(create_app(db_path))
+
+    response = client.post(
+        "/trash-string", json={"gl_top": None, "max_length": 85}
+    )
+
+    chunks = response.json()["chunks"]
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 85 for chunk in chunks)
+    assert all("&!shiny" in chunk and "&!4*" in chunk for chunk in chunks)
+    ids = [int(i) for chunk in chunks for i in chunk.split("&")[0].split(",")]
+    assert sorted(ids) == [1, 4, 618]
+
+
+def test_invalid_language_is_rejected(tmp_path):
+    client = TestClient(create_app(tmp_path / "pokemon.sqlite"))
+
+    assert client.post("/trash-string", json={"lang": "xx"}).status_code == 422

@@ -90,7 +90,9 @@ Request:
 {
   "gl_top": 50,
   "ul_top": null,
-  "ml_top": 40
+  "ml_top": 40,
+  "lang": "en",
+  "max_length": null
 }
 ```
 
@@ -99,9 +101,19 @@ Response:
 ```json
 {
   "ids": [1, 3, 7],
-  "query_string": "1,3,7&!shiny&!lucky&!shadow&!purified&!legendary&!mythical&!costume&!4*&!3*&!@special"
+  "query_string": "1,3,7&!shiny&!lucky&!shadow&!purified&!legendary&!mythical&!costume&!4*&!3*&!@special",
+  "chunks": ["1,3,7&!shiny&..."],
+  "mixed": [{ "pokedex_id": 38, "nome": "Ninetales", "protected_forms": ["alola"], "trash_forms": ["base"] }],
+  "mixed_strings": [{ "label": "Base/Kanto", "pokedex_ids": [38], "chunks": ["!alola&!galar&!hisui&!paldea&38&!shiny&..."] }]
 }
 ```
+
+Regras de seguranca:
+
+- `ids` / `chunks` so contem numeros da Pokedex em que **nenhuma** forma e protegida. A busca por numero do jogo pega todas as formas, entao um numero como o 38 (Ninetales de Kanto inutil, de Alola util) fica fora da string principal e aparece em `mixed`.
+- `mixed_strings` sao strings experimentais por regiao (ex.: `alola&26,52&...`). So funcionam se a busca por `alola`/`galar`/`hisui`/`paldea` tambem trouxer as formas regionais. Confira o resultado na tela antes de transferir.
+- `lang` (`en` ou `pt`) escolhe os termos de busca. No jogo os termos so funcionam no idioma configurado. Os termos `pt` **nao foram verificados no jogo** (vieram de listas de terceiros).
+- `max_length` divide a saida em blocos independentes (cada um com o sufixo de seguranca completo), caso o jogo corte buscas longas. O limite real do jogo nao e documentado.
 
 ## Frontend
 

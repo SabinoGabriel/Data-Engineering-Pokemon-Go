@@ -11,10 +11,27 @@ type LeagueConfig = {
   max: number;
 };
 
+type Lang = "en" | "pt";
+
 type TrashFilters = {
   gl_top: number | null;
   ul_top: number | null;
   ml_top: number | null;
+  lang: Lang;
+  max_length: number | null;
+};
+
+type MixedPokemon = {
+  pokedex_id: number;
+  nome: string;
+  protected_forms: string[];
+  trash_forms: string[];
+};
+
+type MixedString = {
+  label: string;
+  pokedex_ids: number[];
+  chunks: string[];
 };
 
 type PokemonSummary = {
@@ -30,6 +47,9 @@ type PokemonSummary = {
 type TrashStringResponse = {
   ids: number[];
   query_string: string;
+  chunks: string[];
+  mixed: MixedPokemon[];
+  mixed_strings: MixedString[];
   lists: {
     gl: PokemonSummary[];
     ul: PokemonSummary[];
@@ -82,6 +102,13 @@ const DEFAULT_RANKS: Record<LeagueKey, number> = {
   ml: 40,
 };
 
+const CHUNK_OPTIONS: { label: string; value: number | null }[] = [
+  { label: "Uma string so", value: null },
+  { label: "Blocos de ate 300 caracteres", value: 300 },
+  { label: "Blocos de ate 500 caracteres", value: 500 },
+  { label: "Blocos de ate 800 caracteres", value: 800 },
+];
+
 const FORM_LABELS: Record<string, string> = {
   base: "Base/Kanto",
   alola: "Alola",
@@ -109,14 +136,18 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [lang, setLang] = useState<Lang>("en");
+  const [maxLength, setMaxLength] = useState<number | null>(null);
 
   const filters = useMemo<TrashFilters>(
     () => ({
       gl_top: enabled.gl ? ranks.gl : null,
       ul_top: enabled.ul ? ranks.ul : null,
       ml_top: enabled.ml ? ranks.ml : null,
+      lang,
+      max_length: maxLength,
     }),
-    [enabled, ranks],
+    [enabled, ranks, lang, maxLength],
   );
   const debouncedFilters = useDebouncedValue(filters, 280);
 
@@ -161,9 +192,13 @@ export default function Home() {
     if (!value) {
       return;
     }
-    await navigator.clipboard.writeText(value);
-    setCopiedKey(key);
-    window.setTimeout(() => setCopiedKey(null), 1400);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey(null), 1400);
+    } catch {
+      setError("Nao foi possivel copiar. Selecione o texto e copie manualmente.");
+    }
   }
 
   const sections = [
@@ -214,12 +249,8 @@ export default function Home() {
       title: "String meta todas as ligas",
       value: result?.strings.all ?? "",
     },
-    {
-      key: "trash",
-      title: "String Lixeira Segura",
-      value: result?.strings.trash ?? result?.query_string ?? "",
-    },
   ];
+  const trashChunks = result?.chunks ?? [];
 
   return (
     <main className="app-shell">
@@ -280,10 +311,40 @@ export default function Home() {
                 </div>
               </div>
             ))}
+
+            <div className="league-control options">
+              <label>
+                Idioma do jogo
+                <select
+                  value={lang}
+                  onChange={(event) => setLang(event.target.value as Lang)}
+                >
+                  <option value="en">English</option>
+                  <option value="pt">Portugues (nao testado)</option>
+                </select>
+              </label>
+              <label>
+                Tamanho da busca
+                <select
+                  value={maxLength ?? ""}
+                  onChange={(event) =>
+                    setMaxLength(
+                      event.target.value ? Number(event.target.value) : null,
+                    )
+                  }
+                >
+                  {CHUNK_OPTIONS.map((option) => (
+                    <option key={option.label} value={option.value ?? ""}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           <aside className="panel result">
-            <h2>Strings</h2>
+            <h2>Strings meta (para guardar)</h2>
             <div className="string-stack">
               {stringSections.map((section) => (
                 <SearchStringCard
@@ -297,6 +358,94 @@ export default function Home() {
             </div>
             {error ? <p className="error">{error}</p> : null}
           </aside>
+
+          <div className="panel trash-panel">
+            <h2>Lixeira Segura</h2>
+            <p className="notice">
+              Transferir e irreversivel. Cole a string na busca do
+              armazenamento e confira a lista na tela antes de transferir.
+              {lang === "pt"
+                ? " Os termos em portugues ainda nao foram testados no jogo."
+                : ""}
+            </p>
+            {trashChunks.length === 0 ? (
+              <p className="empty-list">Nada para transferir com esses cortes.</p>
+            ) : (
+              <div className="string-stack">
+                {trashChunks.map((chunk, index) => (
+                  <SearchStringCard
+                    copied={copiedKey === `trash-${index}`}
+                    key={`trash-${index}`}
+                    onCopy={() => copyString(`trash-${index}`, chunk)}
+                    title={
+                      trashChunks.length > 1
+                        ? `Bloco ${index + 1} de ${trashChunks.length}`
+                        : "String Lixeira Segura"
+                    }
+                    value={chunk}
+                  />
+                ))}
+              </div>
+            )}
+
+            {result && result.mixed.length > 0 ? (
+              <details className="mixed">
+                <summary>
+                  {result.mixed.length} numeros da Pokedex ficaram de fora
+                  (formas mistas)
+                </summary>
+                <p className="notice">
+                  A busca por numero pega todas as formas. Nesses casos uma
+                  forma presta e outra nao, entao eles nao entram na string
+                  principal para nao transferir um Pokemon util.
+                </p>
+                <ul className="mixed-list">
+                  {result.mixed.map((item) => (
+                    <li key={item.pokedex_id}>
+                      #{item.pokedex_id} {item.nome}: guardar{" "}
+                      {item.protected_forms
+                        .map((form) => FORM_LABELS[form] ?? form)
+                        .join(", ")}
+                      ; sobra{" "}
+                      {item.trash_forms
+                        .map((form) => FORM_LABELS[form] ?? form)
+                        .join(", ")}
+                    </li>
+                  ))}
+                </ul>
+                {result.mixed_strings.length > 0 ? (
+                  <>
+                    <p className="notice">
+                      Experimental: strings por regiao. So funcionam se a
+                      busca por nome da regiao tambem trouxer as formas
+                      regionais. Confira o resultado na tela antes de
+                      transferir.
+                    </p>
+                    <div className="string-stack">
+                      {result.mixed_strings.flatMap((entry) =>
+                        entry.chunks.map((chunk, index) => {
+                          const key = `mixed-${entry.label}-${index}`;
+                          const suffix =
+                            entry.chunks.length > 1
+                              ? ` (${index + 1}/${entry.chunks.length})`
+                              : "";
+                          return (
+                            <SearchStringCard
+                              copied={copiedKey === key}
+                              key={key}
+                              onCopy={() => copyString(key, chunk)}
+                              title={`${entry.label}${suffix}`}
+                              value={chunk}
+                            />
+                          );
+                        }),
+                      )}
+                    </div>
+                  </>
+                ) : null}
+              </details>
+            ) : null}
+          </div>
         </section>
 
         <section className="list-sections" aria-label="Listas filtradas">

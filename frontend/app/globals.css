@@ -373,3 +373,55 @@ button {
     margin-top: 18px;
   }
 }
+
+.notice {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #78350f;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.options {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.options label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.options select {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.trash-panel {
+  padding: 16px;
+  grid-column: 1 / -1;
+}
+
+.mixed {
+  margin-top: 14px;
+}
+
+.mixed summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.mixed-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
