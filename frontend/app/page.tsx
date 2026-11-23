@@ -117,6 +117,12 @@ const FORM_LABELS: Record<string, string> = {
   paldea: "Paldea",
 };
 
+// True when the useful and useless forms sit in different regions, so a
+// region search can tell them apart. Otherwise (Deoxys, Zacian...) it cannot.
+function isRegionSplit(item: MixedPokemon): boolean {
+  return item.trash_forms.some((form) => !item.protected_forms.includes(form));
+}
+
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
 
@@ -251,6 +257,9 @@ export default function Home() {
     },
   ];
   const trashChunks = result?.chunks ?? [];
+  const sameRegionMixed = (result?.mixed ?? []).filter(
+    (item) => !isRegionSplit(item),
+  );
 
   return (
     <main className="app-shell">
@@ -400,7 +409,9 @@ export default function Home() {
                   principal para nao transferir um Pokemon util.
                 </p>
                 <ul className="mixed-list">
-                  {result.mixed.map((item) => (
+                  {result.mixed
+                    .filter((item) => isRegionSplit(item))
+                    .map((item) => (
                     <li key={item.pokedex_id}>
                       #{item.pokedex_id} {item.nome}: guardar{" "}
                       {item.protected_forms
@@ -413,6 +424,17 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
+                {sameRegionMixed.length > 0 ? (
+                  <p className="notice">
+                    Tambem ficaram de fora porque tem formas de batalha ou
+                    variacoes que a busca nao separa (por exemplo Deoxys,
+                    Zacian, Castform):{" "}
+                    {sameRegionMixed
+                      .map((item) => `#${item.pokedex_id} ${item.nome}`)
+                      .join(", ")}
+                    . Revise esses manualmente no jogo.
+                  </p>
+                ) : null}
                 {result.mixed_strings.length > 0 ? (
                   <>
                     <p className="notice">

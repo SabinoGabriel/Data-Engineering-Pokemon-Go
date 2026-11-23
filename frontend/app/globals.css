@@ -233,6 +233,8 @@ button {
   margin: 0;
   padding: 10px;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-all;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #111827;
@@ -424,4 +426,11 @@ button {
   padding-left: 18px;
   font-size: 0.86rem;
   line-height: 1.6;
+}
+
+.string-stack,
+.string-card,
+.trash-panel,
+.result {
+  min-width: 0;
 }
