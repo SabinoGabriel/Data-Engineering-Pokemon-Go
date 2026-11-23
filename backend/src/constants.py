@@ -16,7 +16,52 @@ LEAGUES = {
 
 HTTP_TIMEOUT = 30
 DB_PATH = Path("cache") / "pokemon_go_pvp.sqlite"
-TRANSFER_SUFFIX = "&!shiny&!lucky&!shadow&!purified&!legendary&!mythical&!costume&!4*&!3*&!@special"
+
+# In-game search terms only work in the language the game is set to.
+# "en" comes from Niantic's help page. "pt" was NOT verified in-game: it was
+# compiled from third-party lists, so the UI flags it as untested.
+SEARCH_TERMS = {
+    "en": {
+        "shiny": "shiny",
+        "lucky": "lucky",
+        "shadow": "shadow",
+        "purified": "purified",
+        "legendary": "legendary",
+        "mythical": "mythical",
+        "costume": "costume",
+        "special": "@special",
+    },
+    "pt": {
+        "shiny": "brilhante",
+        "lucky": "sortudo",
+        "shadow": "sombroso",
+        "purified": "purificado",
+        "legendary": "lendário",
+        "mythical": "mítico",
+        "costume": "traje",
+        "special": "@especial",
+    },
+}
+DEFAULT_LANG = "en"
+PROTECTED_TERM_KEYS = (
+    "shiny",
+    "lucky",
+    "shadow",
+    "purified",
+    "legendary",
+    "mythical",
+    "costume",
+)
+
+
+def build_transfer_suffix(lang: str = DEFAULT_LANG) -> str:
+    terms = SEARCH_TERMS[lang]
+    protected = "".join(f"&!{terms[key]}" for key in PROTECTED_TERM_KEYS)
+    return f"{protected}&!4*&!3*&!{terms['special']}"
+
+
+TRANSFER_SUFFIX = build_transfer_suffix("en")
+REGION_SEARCH_TERMS = ("alola", "galar", "hisui", "paldea")
 
 REGION_TOKENS = {
     "alola": "alola",
@@ -108,4 +153,11 @@ REGION_LOCKED_SPECIES = {
     "overqwil": "hisui",
     "sneasler": "hisui",
     "ursaluna": "hisui",
+}
+
+# The only evolution in the game that crosses regional forms: base Ursaring
+# evolves into Hisuian Ursaluna. Keys are family_key values; the key branch is
+# protected when any listed source branch is ranked.
+CROSS_FORM_EVOLUTIONS = {
+    "FAMILY_TEDDIURSA|base": ("FAMILY_TEDDIURSA|hisui",),
 }

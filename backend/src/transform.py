@@ -7,12 +7,14 @@ from collections.abc import Iterable
 import pandas as pd
 
 from src.constants import (
+    CROSS_FORM_EVOLUTIONS,
     LEAGUES,
     PVP_ID_IGNORED_TOKENS,
     PVP_SPECIES_ALIASES,
     REGION_LOCKED_SPECIES,
     REGION_TOKENS,
-    TRANSFER_SUFFIX,
+    DEFAULT_LANG,
+    build_transfer_suffix,
 )
 
 
@@ -51,25 +53,23 @@ def normalize_pvpoke_species_id(species_id: str) -> tuple[str, str]:
 
 
 def region_from_gamemaster_entry(entry: dict) -> str:
+    """Region of a gamemaster entry, from its own id/tags only.
+
+    Family refs (parent/evolutions) are deliberately NOT used: PvPoke lists
+    cross-region links there (base Cubone lists marowak_alolan, base Raticate
+    lists rattata_alolan as parent), which would mislabel base forms as regional.
+    Regional evolutions with a neutral speciesId are handled by
+    REGION_LOCKED_SPECIES instead.
+    """
     species_id = str(entry.get("speciesId", "")).lower()
-    tags = entry.get("tags") or []
-    family = entry.get("family") or {}
-    family_refs = [family.get("parent"), *(family.get("evolutions") or [])]
 
     region = regional_form_from_tokens(species_id.split("_"))
     if region != "base":
         return region
 
-    region = regional_form_from_tokens(tags)
+    region = regional_form_from_tokens(entry.get("tags") or [])
     if region != "base":
         return region
-
-    for family_ref in family_refs:
-        if not family_ref:
-            continue
-        region = regional_form_from_tokens(str(family_ref).split("_"))
-        if region != "base":
-            return region
 
     base_species = clean_species_id(species_id).replace("_", "-")
     return REGION_LOCKED_SPECIES.get(base_species, "base")
@@ -134,7 +134,7 @@ def filter_elite_rankings(rankings: dict[str, pd.DataFrame]) -> dict[str, pd.Dat
     return filtered
 
 
-def compute_quantidade_listas(
+def add_family_ranks(
     dimension: pd.DataFrame, filtered_rankings: dict[str, pd.DataFrame]
 ) -> pd.DataFrame:
     dim = dimension.copy()
@@ -145,29 +145,84 @@ def compute_quantidade_listas(
         .to_dict()
     )
 
-    family_leagues: dict[str, set[str]] = {}
+    family_ranks: dict[str, dict[str, int]] = {}
     for league, ranking_df in filtered_rankings.items():
-        for row in ranking_df[["species_slug", "forma_regional"]].drop_duplicates().itertuples():
+        rank_column = f"rank_{league.lower()}"
+        for row in ranking_df[
+            ["species_slug", "forma_regional", "rank_position"]
+        ].itertuples():
             chain_id = species_to_chain.get(row.species_slug, f"unknown:{row.species_slug}")
 
             # Critical regional isolation rule:
             # The propagated utility key is PvPoke family_id + regional_form.
-            # Galarian Stunfisk writes to "FAMILY_STUNFISK|galar", while
-            # Kanto/Base Stunfisk reads from "FAMILY_STUNFISK|base" and stays
-            # at 0 unless that exact base branch appears in an elite PvPoke list.
+            # Galarian Stunfisk writes to "FAMILY_STUNFISK|galar", while Kanto/Base
+            # Stunfisk reads from "FAMILY_STUNFISK|base" and stays unranked unless
+            # that exact base branch appears in an elite PvPoke list.
             family_key = f"{chain_id}|{row.forma_regional}"
-            family_leagues.setdefault(family_key, set()).add(league)
+            current_rank = family_ranks.setdefault(family_key, {}).get(rank_column)
+            rank_position = int(row.rank_position)
+            if current_rank is None or rank_position < current_rank:
+                family_ranks[family_key][rank_column] = rank_position
 
-    dim["quantidade_listas"] = dim["family_key"].map(
-        lambda family_key: len(family_leagues.get(family_key, set()))
-    )
+    # Explicit exceptions where an evolution crosses regional forms in-game
+    # (Ursaring base -> Ursaluna Hisui). The target branch inherits the best
+    # rank of its source branch; the reverse never happens.
+    for target_key, source_keys in CROSS_FORM_EVOLUTIONS.items():
+        for source_key in source_keys:
+            for rank_column, rank in family_ranks.get(source_key, {}).items():
+                target_ranks = family_ranks.setdefault(target_key, {})
+                current = target_ranks.get(rank_column)
+                if current is None or rank < current:
+                    target_ranks[rank_column] = rank
+
+    for league in LEAGUES:
+        rank_column = f"rank_{league.lower()}"
+        dim[rank_column] = dim["family_key"].map(
+            lambda family_key: family_ranks.get(family_key, {}).get(rank_column)
+        )
+        dim[rank_column] = dim[rank_column].astype("Int64")
+
     return dim
 
 
-def build_transfer_string(df: pd.DataFrame) -> str:
-    zero_ids = sorted(
-        int(pokedex_id)
-        for pokedex_id in df.loc[df["quantidade_listas"] == 0, "pokedex_id"].dropna().unique()
-    )
-    ids = ",".join(str(pokedex_id) for pokedex_id in zero_ids)
-    return f"{ids}{TRANSFER_SUFFIX}" if ids else TRANSFER_SUFFIX
+def _unique_sorted_ids(pokedex_ids: Iterable[int]) -> list[int]:
+    return sorted({int(pokedex_id) for pokedex_id in pokedex_ids})
+
+
+def build_transfer_string_from_ids(
+    pokedex_ids: Iterable[int], lang: str = DEFAULT_LANG, prefix: str = ""
+) -> str:
+    """Build one search string. `prefix` is an optional extra filter (e.g. "alola")."""
+    ids = ",".join(str(pokedex_id) for pokedex_id in _unique_sorted_ids(pokedex_ids))
+    head = "&".join(part for part in (prefix, ids) if part)
+    return f"{head}{build_transfer_suffix(lang)}" if head else build_transfer_suffix(lang)
+
+
+def build_transfer_chunks(
+    pokedex_ids: Iterable[int],
+    lang: str = DEFAULT_LANG,
+    max_length: int | None = None,
+    prefix: str = "",
+) -> list[str]:
+    """Split ids into self-contained search strings no longer than `max_length`.
+
+    Every chunk carries the full safety suffix, so each one is safe to use on
+    its own. Returns [] when there is nothing to transfer.
+    """
+    ids = _unique_sorted_ids(pokedex_ids)
+    if not ids:
+        return []
+    if not max_length:
+        return [build_transfer_string_from_ids(ids, lang, prefix)]
+
+    chunks: list[str] = []
+    current: list[int] = []
+    for pokedex_id in ids:
+        candidate = [*current, pokedex_id]
+        if current and len(build_transfer_string_from_ids(candidate, lang, prefix)) > max_length:
+            chunks.append(build_transfer_string_from_ids(current, lang, prefix))
+            current = [pokedex_id]
+        else:
+            current = candidate
+    chunks.append(build_transfer_string_from_ids(current, lang, prefix))
+    return chunks

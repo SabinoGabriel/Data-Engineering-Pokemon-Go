@@ -37,8 +37,14 @@ ENV/
 # Project specific
 logs/
 cache/
+backend/cache/
 output/
 *.log
+
+# Frontend
+frontend/.next/
+frontend/node_modules/
+frontend/out/
 
 # OS
 .DS_Store

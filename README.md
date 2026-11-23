@@ -1,147 +1,146 @@
-# Data Engineering Pokemon GO PvP ETL Dashboard
+# Pokemon GO PvP Safe Trash
 
 [Leia em portugues do Brasil](README.pt-BR.md)
 
-Python data engineering project that builds an ETL pipeline and an interactive Streamlit dashboard for Pokemon GO PvP rankings.
+Monorepo for a Pokemon GO PvP ETL and dynamic safe transfer string app.
 
-The pipeline extracts PvPoke ranking data, transforms it with pandas, stores the curated output in SQLite, and generates a safe in-game transfer search string for Pokemon with no detected PvP family utility.
+The backend extracts PvPoke rankings, models released Pokemon GO families in SQLite, and exposes a FastAPI endpoint that calculates a safe transfer search string on demand. The frontend is a mobile-first Next.js app with rank sliders for Great League, Ultra League, and Master League.
 
 ## Tech Stack
 
-- Python
-- pandas
-- requests
-- SQLite
-- Streamlit
-- pytest
-- GitHub Actions
-
-## What This Project Demonstrates
-
-- ETL pipeline design with clear Extract, Transform and Load layers
-- API and raw JSON integration from GitHub-hosted data sources
-- Data modeling for domain-specific business rules
-- pandas transformations and DataFrame-based analytics
-- SQLite persistence for reproducible local results
-- Streamlit dashboard development
-- Automated tests for critical transformation logic
-- Portfolio-friendly repository structure for data engineering roles
-
-## Data Sources
-
-- Great League rankings: PvPoke top 150
-- Ultra League rankings: PvPoke top 100
-- Master League rankings: PvPoke top 40
-- Pokemon dimension: PvPoke `gamemaster.json`
-
-The project uses PvPoke's `gamemaster.json` as the main Pokemon dimension because it reflects Pokemon GO-specific forms, released Pokemon, PvP IDs, shadows and family metadata more accurately than a generic Pokedex source.
+- Backend: Python, pandas, requests, SQLite, FastAPI, Pydantic, pytest
+- Frontend: Next.js, React, TypeScript
+- CI: GitHub Actions
 
 ## Architecture
 
+This root README gives only the monorepo overview. Architecture details live in:
+
+- [Backend architecture](backend/README.md)
+- [Frontend architecture](frontend/README.md)
+
 ```text
 .
-|-- app.py                         # Streamlit entrypoint
-|-- requirements.txt               # Python dependencies
-|-- README.pt-BR.md                # Brazilian Portuguese documentation
-|-- LICENSE                        # MIT license
-|-- cache/                         # Local SQLite output, ignored by git
-|-- tests/                         # Unit tests for transformation rules
-|-- .github/workflows/ci.yml       # GitHub Actions CI
-|-- src/
-|   |-- constants.py               # URLs, league cutoffs, regions and transfer suffix
-|   |-- dashboard.py               # Streamlit UI and filters
-|   |-- database.py                # SQLite schema and persistence
-|   |-- etl.py                     # Extract -> Transform -> Load orchestration
-|   |-- transform.py               # Business rules, regional forms and family propagation
-|   |-- data_sources/
-|   |   |-- pvpoke_client.py       # PvPoke rankings and gamemaster client
-|   |   `-- static_data.py         # Legacy auxiliary data
-|   `-- utils/
-|       `-- logger.py              # Project logger
+|-- backend/
+|   |-- README.md                 # Backend architecture notes
+|   |-- requirements.txt
+|   |-- pytest.ini
+|   |-- cache/                    # Local SQLite output, ignored by git
+|   |-- config/
+|   |-- tests/
+|   `-- src/
+|       |-- constants.py          # URLs, league cutoffs, region rules, transfer suffix
+|       |-- database.py           # SQLite schema and persistence
+|       |-- etl.py                # Extract -> Transform -> Load orchestration
+|       |-- transform.py          # Family rank propagation and transfer string helpers
+|       |-- api/main.py           # FastAPI app
+|       `-- data_sources/
+|           `-- pvpoke_client.py  # PvPoke rankings and gamemaster client
+|-- frontend/
+|   |-- README.md                 # Frontend architecture notes
+|   |-- package.json
+|   `-- app/
+|       |-- page.tsx              # Dynamic safe trash UI
+|       `-- globals.css
+`-- .github/workflows/ci.yml
 ```
 
-## Business Rule: Regional Forms
+## Business Rule: Regional Isolation
 
-Pokemon with the same base species but different regional forms must be treated as independent entities. For example, Alolan Ninetales must never protect Kanto Ninetales, and Galarian Stunfisk must never protect base Stunfisk.
-
-The ETL propagates PvP usefulness through the key:
+Regional forms and base forms are separate PvP families. The backend propagates rank utility with this key:
 
 ```text
 family_id|regional_form
 ```
 
-This means `FAMILY_VULPIX|alola` and `FAMILY_VULPIX|base` are separate families for scoring purposes.
+For example, `FAMILY_VULPIX|alola` and `FAMILY_VULPIX|base` are independent. Alolan Ninetales can protect Alolan Vulpix, but it never protects Kanto Vulpix.
 
-The rule is implemented in `src/transform.py` and covered by unit tests.
+This rule is implemented in `backend/src/transform.py` and covered by unit tests.
 
-## Dashboard Output
+## Dynamic Ranking Model
 
-The dashboard displays:
+The SQLite `pokemon_dimension` table stores exact nullable ranks:
 
-- `Pokedex ID`
-- `Name`
-- `Regional Form`
-- `League Count`
+- `rank_gl`
+- `rank_ul`
+- `rank_ml`
 
-The **Safe Trash String** section lists unique Pokedex IDs with `quantidade_listas == 0` and appends this Pokemon GO safety suffix:
+Pokemon outside a league cutoff have `NULL` for that league. The API receives active cutoffs from the frontend and treats a Pokemon family as protected when any active league rank is within the selected top N.
 
-```text
-&!shiny&!lucky&!shadow&!purified&!legendary&!mythical&!costume&!4*&!3*&!@special
-```
+## Backend API
 
-## Getting Started
+For backend architecture and planned reuse boundaries, see [backend/README.md](backend/README.md).
 
-Create and activate a virtual environment:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-Install dependencies:
+Start from `backend/`:
 
 ```powershell
 python -m pip install -r requirements.txt
+python -m src.etl
+uvicorn src.api.main:app --reload
 ```
 
-Run the dashboard:
+Endpoints:
+
+- `GET /health`
+- `POST /trash-string`
+
+Request:
+
+```json
+{
+  "gl_top": 50,
+  "ul_top": null,
+  "ml_top": 40,
+  "lang": "en",
+  "max_length": null
+}
+```
+
+Response:
+
+```json
+{
+  "ids": [1, 3, 7],
+  "query_string": "1,3,7&!shiny&!lucky&!shadow&!purified&!legendary&!mythical&!costume&!4*&!3*&!@special",
+  "chunks": ["1,3,7&!shiny&..."],
+  "mixed": [{ "pokedex_id": 38, "nome": "Ninetales", "protected_forms": ["alola"], "trash_forms": ["base"] }],
+  "mixed_strings": [{ "label": "Base/Kanto", "pokedex_ids": [38], "chunks": ["!alola&!galar&!hisui&!paldea&38&!shiny&..."] }]
+}
+```
+
+Safety rules:
+
+- `ids` / `chunks` only contain Pokedex numbers where **no** form is protected. The in-game number search matches every form of that number, so a number such as 38 (Kanto Ninetales useless, Alolan Ninetales useful) is excluded from the main string and listed in `mixed`.
+- `mixed_strings` are experimental region-scoped strings (e.g. `alola&26,52&...`). They only work if the in-game `alola`/`galar`/`hisui`/`paldea` search also returns regional forms. Check the result on screen before transferring.
+- `lang` (`en` or `pt`) picks the search terms. In-game terms only work in the game's own language. The `pt` terms are **not verified in-game** (compiled from third-party lists).
+- `max_length` splits the output into self-contained chunks (each with the full safety suffix) in case the game truncates long searches. The game's real limit is not documented.
+
+## Frontend
+
+For frontend architecture and planned component/hook boundaries, see [frontend/README.md](frontend/README.md).
+
+Start from `frontend/`:
 
 ```powershell
-streamlit run app.py
+npm install
+npm run dev
+```
+
+The frontend expects the API at `http://localhost:8000`. Override with:
+
+```powershell
+$env:NEXT_PUBLIC_API_BASE_URL="http://localhost:8000"
 ```
 
 Open:
 
 ```text
-http://localhost:8501
+http://localhost:3000
 ```
 
 ## Running Tests
 
 ```powershell
-pytest
+cd backend
+python -m pytest
 ```
-
-## Local Database
-
-The ETL writes local data to:
-
-```text
-cache/pokemon_go_pvp.sqlite
-```
-
-Main tables:
-
-- `raw_rankings`: raw PvPoke ranking snapshots
-- `pokemon_dimension`: final curated dimension with `quantidade_listas`
-- `metadata`: refresh metadata
-
-## Repository Keywords
-
-This project is intentionally structured around common data engineering and analytics keywords:
-
-`python`, `pandas`, `streamlit`, `sqlite`, `etl`, `data-engineering`, `dashboard`, `api-integration`, `pokemon-go`, `pvpoke`, `pytest`, `github-actions`
-
-## License
-
-MIT.
